@@ -15,14 +15,24 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
+      - name: Locate app dir
+        id: loc
+        run: |
+          DIR=$(dirname "$(find . -name pubspec.yaml -not -path '*/.*' | head -n1)")
+          if [ "$DIR" = "" ] || [ "$DIR" = "." ] && [ ! -f pubspec.yaml ]; then
+            echo "::error::لم يتم العثور على pubspec.yaml — ارفع محتوى حزمة quran-flutter-ready أولًا."
+            exit 1
+          fi
+          echo "Found Flutter app at: $DIR"
+          echo "dir=$DIR" >> "$GITHUB_OUTPUT"
       - name: pub get
-        working-directory: app
+        working-directory: ${{ steps.loc.outputs.dir }}
         run: flutter pub get
       - name: Build APK
-        working-directory: app
-        # ⬇⬇⬇ بدّل السطر ده بعنوان الـ Space بتاعك على Hugging Face ⬇⬇⬇
+        working-directory: ${{ steps.loc.outputs.dir }}
+        # ⬇⬇⬇ بدّل بعنوان الـ Space بتاعك ⬇⬇⬇
         run: flutter build apk --release --dart-define=API_BASE=https://REPLACE-WITH-YOUR-SPACE.hf.space
       - uses: actions/upload-artifact@v4
         with:
           name: quran-splitter-apk
-          path: app/build/app/outputs/flutter-apk/app-release.apk
+          path: ${{ steps.loc.outputs.dir }}/build/app/outputs/flutter-apk/app-release.apk
