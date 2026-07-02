@@ -6,6 +6,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -15,24 +17,35 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
-      - name: Locate app dir
-        id: loc
-        run: |
-          DIR=$(dirname "$(find . -name pubspec.yaml -not -path '*/.*' | head -n1)")
-          if [ "$DIR" = "" ] || [ "$DIR" = "." ] && [ ! -f pubspec.yaml ]; then
-            echo "::error::لم يتم العثور على pubspec.yaml — ارفع محتوى حزمة quran-flutter-ready أولًا."
-            exit 1
-          fi
-          echo "Found Flutter app at: $DIR"
-          echo "dir=$DIR" >> "$GITHUB_OUTPUT"
       - name: pub get
-        working-directory: ${{ steps.loc.outputs.dir }}
+        working-directory: app
         run: flutter pub get
       - name: Build APK
-        working-directory: ${{ steps.loc.outputs.dir }}
-        # ⬇⬇⬇ بدّل بعنوان الـ Space بتاعك ⬇⬇⬇
-        run: flutter build apk --release --dart-define=API_BASE=https://abdo96-quran-splitter-space.hf.space
+        working-directory: app
+        # ⬇⬇⬇ بدّل العنوان ده بعنوان سيرفرك على Hugging Face ⬇⬇⬇
+        run: flutter build apk --release --dart-define=API_BASE=https://REPLACE-WITH-YOUR-SPACE.hf.space
       - uses: actions/upload-artifact@v4
         with:
           name: quran-splitter-apk
-          path: ${{ steps.loc.outputs.dir }}/build/app/outputs/flutter-apk/app-release.apk
+          path: app/build/app/outputs/flutter-apk/app-release.apk
+
+      # ===== للنشر على Google Play (اختياري) =====
+      # يعمل فقط عند إضافة أسرار التوقيع في GitHub → Settings → Secrets:
+      # KEYSTORE_BASE64 / KEYSTORE_PASSWORD / KEY_ALIAS / KEY_PASSWORD
+      - name: Build signed AAB for Google Play
+        if: ${{ env.KEYSTORE_BASE64 != '' }}
+        working-directory: app
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 -d > /tmp/upload.keystore
+          export ANDROID_KEYSTORE_PATH=/tmp/upload.keystore
+          flutter build appbundle --release --dart-define=API_BASE=https://abdo96-quran-splitter-space.hf.space
+      - name: Upload AAB
+        if: ${{ env.KEYSTORE_BASE64 != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: quran-splitter-aab
+          path: app/build/app/outputs/bundle/release/app-release.aab
