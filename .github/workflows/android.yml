@@ -31,7 +31,7 @@ jobs:
       - name: Build APK
         working-directory: ${{ steps.loc.outputs.dir }}
         # ⬇⬇⬇ بدّل بعنوان الـ Space بتاعك ⬇⬇⬇
-        run: flutter build apk --release --dart-define=API_BASE=https://REPLACE-WITH-YOUR-SPACE.hf.space
+        run: flutter build apk --release --dart-define=API_BASE=https://abdo96-quran-splitter-space.hf.space
       - uses: actions/upload-artifact@v4
         with:
           name: quran-splitter-apk
