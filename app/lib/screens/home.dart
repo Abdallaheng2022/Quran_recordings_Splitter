@@ -22,7 +22,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with LocaleRebuild<HomeScreen> {
   Map<String, dynamic>? _me;
   String? _fileName;
   Uint8List? _fileBytes;
@@ -80,7 +80,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   String _surahDisplay(Surah s) => appLocale.value == 'ar'
-      ? s.arabic
+      ? '${s.number}. ${s.arabic}'
       : '${s.number}. ${s.latin}';
 
   Future<void> _pickAudio() async {

@@ -1,6 +1,8 @@
-// editor.dart — محرر المقاطع: اسمع كل مقطع، حرّك الحدود (المقاطع المتجاورة
-// تتأثر ببعضها تلقائيًا لأن نهاية مقطع هي بداية التالي)، ومؤشر تشغيل متحرك
-// قابل للسحب داخل المقطع. ثم احفظ في المكان الذي تختاره.
+// editor.dart — محرر المقاطع.
+// التشغيل: نحمّل الملف كاملًا مرة واحدة، وكل مقطع يُشغَّل بالقفز لبدايته
+// (seek) والإيقاف تلقائيًا عند نهايته — أمتن من setClip. المؤشر يظهر دائمًا
+// للمقطع النشط، يتحرك مع الصوت، وقابل للسحب للاستماع من أي موضع.
+// الحدود مشتركة: نهاية مقطع = بداية التالي، فسحب حدٍّ يزيح جاره تلقائيًا.
 import 'dart:async';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -12,7 +14,7 @@ import '../theme.dart';
 class EditorScreen extends StatefulWidget {
   final Api api;
   final String sessionToken;
-  final String audioPath; // نسخة محلية من الملف للتشغيل
+  final String audioPath;
   final double duration;
   final List<List<double>> initialBounds;
   final List<String> labels;
@@ -30,18 +32,19 @@ class EditorScreen extends StatefulWidget {
   State<EditorScreen> createState() => _EditorScreenState();
 }
 
-class _EditorScreenState extends State<EditorScreen> {
+class _EditorScreenState extends State<EditorScreen> with LocaleRebuild<EditorScreen> {
   final _player = AudioPlayer();
-  // الحدود المشتركة: edges[i] = بداية المقطع i = نهاية المقطع i-1.
-  late List<double> _edges;
-  int? _playing; // فهرس المقطع قيد التشغيل
-  double _pos = 0; // موضع التشغيل داخل المقطع (ثوانٍ نسبية)
-  StreamSubscription<Duration>? _posSub;
-  StreamSubscription<PlayerState>? _stateSub;
-  bool _saving = false;
+  late List<double> _edges; // edges[i] = بداية i = نهاية i-1
+  int? _active;
+  double _absPos = 0;
+  bool _isPlaying = false;
   bool _dragging = false;
+  bool _ready = false;
+  bool _saving = false;
+  StreamSubscription<Duration>? _posSub;
+  StreamSubscription<bool>? _stSub;
 
-  static const _minGap = 0.3; // أقل طول مسموح للمقطع (ثوانٍ)
+  static const _minGap = 0.3;
 
   int get _n => _edges.length - 1;
 
@@ -58,54 +61,53 @@ class _EditorScreenState extends State<EditorScreen> {
   Future<void> _init() async {
     try {
       await _player.setFilePath(widget.audioPath);
-    } catch (_) {}
+      _ready = true;
+    } catch (_) {
+      _ready = false;
+    }
     _posSub = _player.positionStream.listen((d) {
-      if (_playing != null && !_dragging && mounted) {
-        setState(() => _pos = d.inMilliseconds / 1000.0);
+      _absPos = d.inMilliseconds / 1000.0;
+      if (_active != null && _isPlaying && !_dragging) {
+        final end = _edges[_active! + 1];
+        if (_absPos >= end) {
+          _player.pause();
+          _absPos = end;
+        }
       }
+      if (mounted && !_dragging) setState(() {});
     });
-    _stateSub = _player.playerStateStream.listen((s) {
-      if (s.processingState == ProcessingState.completed && mounted) {
-        setState(() {
-          _playing = null;
-          _pos = 0;
-        });
-      }
+    _stSub = _player.playingStream.listen((p) {
+      if (mounted) setState(() => _isPlaying = p);
     });
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
     _posSub?.cancel();
-    _stateSub?.cancel();
+    _stSub?.cancel();
     _player.dispose();
     super.dispose();
   }
 
-  Future<void> _togglePlay(int i) async {
-    if (_playing == i && _player.playing) {
-      await _player.pause();
-      setState(() {});
-      return;
-    }
-    await _playSegment(i, from: _playing == i ? _pos : 0);
+  Future<void> _play(int i, {double? fromAbs}) async {
+    final start = _edges[i];
+    final from = fromAbs ?? start;
+    setState(() => _active = i);
+    try {
+      await _player.seek(Duration(milliseconds: (from * 1000).round()));
+      await _player.play();
+    } catch (_) {}
   }
 
-  Future<void> _playSegment(int i, {double from = 0}) async {
-    final start = _edges[i], end = _edges[i + 1];
-    try {
-      await _player.setClip(
-        start: Duration(milliseconds: (start * 1000).round()),
-        end: Duration(milliseconds: (end * 1000).round()),
-      );
-      await _player
-          .seek(Duration(milliseconds: (from.clamp(0, end - start) * 1000).round()));
-      setState(() {
-        _playing = i;
-        _pos = from;
-      });
-      _player.play();
-    } catch (_) {}
+  Future<void> _toggle(int i) async {
+    if (_active == i && _isPlaying) {
+      await _player.pause();
+      return;
+    }
+    final resume =
+        _active == i && _absPos > _edges[i] && _absPos < _edges[i + 1];
+    await _play(i, fromAbs: resume ? _absPos : _edges[i]);
   }
 
   Future<void> _save() async {
@@ -122,11 +124,10 @@ class _EditorScreenState extends State<EditorScreen> {
     if (!mounted) return;
     if (!r.ok || r.bytes == null) {
       setState(() => _saving = false);
-      final msg = r.data['error']?.toString() ?? t('unexpected');
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(r.data['error']?.toString() ?? t('unexpected'))));
       return;
     }
-    // (التعديل 6) المستخدم يختار مكان الحفظ عبر نافذة النظام
     String? path;
     try {
       path = await FilePicker.platform.saveFile(
@@ -139,14 +140,10 @@ class _EditorScreenState extends State<EditorScreen> {
     } catch (_) {}
     setState(() => _saving = false);
     if (!mounted) return;
-    if (path == null) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(t('saveCanceled'))));
-      return;
-    }
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text('${t('savedTo')} $path')));
-    Navigator.of(context).pop(true);
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content:
+            Text(path == null ? t('saveCanceled') : '${t('savedTo')} $path')));
+    if (path != null) Navigator.of(context).pop(true);
   }
 
   String _fmt(double s) {
@@ -210,17 +207,18 @@ class _EditorScreenState extends State<EditorScreen> {
 
   Widget _segmentCard(int i) {
     final start = _edges[i], end = _edges[i + 1];
-    final isActive = _playing == i;
-    final isPlaying = isActive && _player.playing;
-    // حدود السحب: لا يتجاوز حدود الجيران (فيتأثر الجار تلقائيًا عبر edges)
+    final isActive = _active == i;
+    final playingThis = isActive && _isPlaying;
     final lo = i == 0 ? 0.0 : _edges[i - 1] + _minGap;
     final hi = i == _n - 1 ? widget.duration : _edges[i + 2] - _minGap;
-    final label =
-        i < widget.labels.length ? widget.labels[i] : '${i + 1}';
+    final label = i < widget.labels.length && widget.labels[i].isNotEmpty
+        ? widget.labels[i]
+        : '${i + 1}';
+    final rel = (_absPos - start).clamp(0.0, (end - start)).toDouble();
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
       decoration: BoxDecoration(
         color: Mushaf.card,
         borderRadius: BorderRadius.circular(16),
@@ -235,23 +233,21 @@ class _EditorScreenState extends State<EditorScreen> {
           Row(
             children: [
               InkWell(
-                onTap: () => _togglePlay(i),
+                onTap: _ready ? () => _toggle(i) : null,
                 borderRadius: BorderRadius.circular(22),
                 child: Container(
-                  width: 40,
-                  height: 40,
+                  width: 42,
+                  height: 42,
                   decoration: BoxDecoration(
-                    color: isPlaying
+                    color: playingThis
                         ? Mushaf.primary
                         : Mushaf.primary.withOpacity(.10),
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(
-                    isPlaying ? Icons.pause : Icons.play_arrow,
-                    color: isPlaying
-                        ? Mushaf.primaryForeground
-                        : Mushaf.primary,
-                  ),
+                  child: Icon(playingThis ? Icons.pause : Icons.play_arrow,
+                      color: playingThis
+                          ? Mushaf.primaryForeground
+                          : Mushaf.primary),
                 ),
               ),
               const SizedBox(width: 10),
@@ -274,62 +270,77 @@ class _EditorScreenState extends State<EditorScreen> {
               ),
             ],
           ),
-          // حدود المقطع (تحريكها يعدّل الجار تلقائيًا)
-          SliderTheme(
-            data: SliderTheme.of(context).copyWith(
-              activeTrackColor: Mushaf.primary,
-              inactiveTrackColor: Mushaf.muted,
-              rangeThumbShape:
-                  const RoundRangeSliderThumbShape(enabledThumbRadius: 8),
-              overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
-              trackHeight: 3,
-            ),
-            child: RangeSlider(
-              min: lo,
-              max: hi,
-              values: RangeValues(
-                start.clamp(lo, hi - _minGap),
-                end.clamp(lo + _minGap, hi),
+          Row(
+            children: [
+              SizedBox(
+                width: 42,
+                child: Text(_fmt(start + rel),
+                    style: const TextStyle(
+                        fontSize: 11, color: Mushaf.mutedForeground)),
               ),
-              onChanged: (v) {
-                setState(() {
-                  _edges[i] = v.start;
-                  _edges[i + 1] =
-                      v.end.clamp(v.start + _minGap, hi).toDouble();
-                });
-              },
-              onChangeEnd: (_) {
-                if (isActive) _playSegment(i); // أعد التشغيل بالحدود الجديدة
-              },
-            ),
+              Expanded(
+                child: SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    activeTrackColor: Mushaf.accent,
+                    inactiveTrackColor: Mushaf.muted,
+                    thumbColor: Mushaf.accent,
+                    thumbShape:
+                        const RoundSliderThumbShape(enabledThumbRadius: 7),
+                    overlayShape:
+                        const RoundSliderOverlayShape(overlayRadius: 14),
+                    trackHeight: 3,
+                  ),
+                  child: Slider(
+                    min: 0,
+                    max: (end - start).clamp(0.1, double.infinity).toDouble(),
+                    value: rel,
+                    onChangeStart: (_) {
+                      _dragging = true;
+                      setState(() => _active = i);
+                    },
+                    onChanged: (v) => setState(() => _absPos = start + v),
+                    onChangeEnd: (v) async {
+                      _dragging = false;
+                      await _play(i, fromAbs: start + v);
+                    },
+                  ),
+                ),
+              ),
+            ],
           ),
-          // مؤشر التشغيل المتحرك — قابل للسحب للاستماع من أي موضع
-          if (isActive)
-            SliderTheme(
-              data: SliderTheme.of(context).copyWith(
-                activeTrackColor: Mushaf.accent,
-                inactiveTrackColor: Mushaf.muted,
-                thumbColor: Mushaf.accent,
-                thumbShape:
-                    const RoundSliderThumbShape(enabledThumbRadius: 6),
-                overlayShape:
-                    const RoundSliderOverlayShape(overlayRadius: 12),
-                trackHeight: 2,
+          Row(
+            children: [
+              const SizedBox(width: 42),
+              Expanded(
+                child: SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    activeTrackColor: Mushaf.primary,
+                    inactiveTrackColor: Mushaf.muted,
+                    rangeThumbShape: const RoundRangeSliderThumbShape(
+                        enabledThumbRadius: 8),
+                    overlayShape:
+                        const RoundSliderOverlayShape(overlayRadius: 14),
+                    trackHeight: 3,
+                  ),
+                  child: RangeSlider(
+                    min: lo,
+                    max: hi,
+                    values: RangeValues(
+                      start.clamp(lo, hi - _minGap),
+                      end.clamp(lo + _minGap, hi),
+                    ),
+                    onChanged: (v) {
+                      setState(() {
+                        _edges[i] = v.start;
+                        _edges[i + 1] =
+                            v.end.clamp(v.start + _minGap, hi).toDouble();
+                      });
+                    },
+                  ),
+                ),
               ),
-              child: Slider(
-                min: 0,
-                max: (end - start).clamp(0.1, double.infinity),
-                value: _pos.clamp(0, end - start).toDouble(),
-                onChangeStart: (_) => _dragging = true,
-                onChanged: (v) => setState(() => _pos = v),
-                onChangeEnd: (v) async {
-                  _dragging = false;
-                  await _player
-                      .seek(Duration(milliseconds: (v * 1000).round()));
-                  if (!_player.playing) _player.play();
-                },
-              ),
-            ),
+            ],
+          ),
         ],
       ),
     );

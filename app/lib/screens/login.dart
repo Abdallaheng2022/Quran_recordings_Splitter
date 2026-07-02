@@ -13,7 +13,7 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends State<LoginScreen> with LocaleRebuild<LoginScreen> {
   final _email = TextEditingController();
   final _pass = TextEditingController();
   bool _busy = false;

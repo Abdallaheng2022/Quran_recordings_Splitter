@@ -45,6 +45,25 @@ String t(String key) {
   return _strings[lang]?[key] ?? _strings['en']?[key] ?? key;
 }
 
+/// امزج هذا مع أي State لإعادة بنائها فور تغيّر اللغة (تحديث كل النصوص حيًّا).
+mixin LocaleRebuild<T extends StatefulWidget> on State<T> {
+  void _localeRebuild() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    appLocale.addListener(_localeRebuild);
+  }
+
+  @override
+  void dispose() {
+    appLocale.removeListener(_localeRebuild);
+    super.dispose();
+  }
+}
+
 const Map<String, Map<String, String>> _strings = {
   'ar': {
     'appTitle': 'مُقسّم التلاوة',
@@ -107,6 +126,7 @@ const Map<String, Map<String, String>> _strings = {
     'restore': 'استعادة اشتراك سابق',
     'yearlySub': 'اشتراك سنوي',
     'subscribed': 'تم تفعيل اشتراكك. شكرًا!',
+    'billingUnavailable': 'الشراء غير متاح: هذا التطبيق يجب أن يُثبَّت من Google Play (مسار اختبار داخلي على الأقل) ويكون منتج الاشتراك مفعّلًا. لن يعمل الشراء في نسخة APK مثبّتة يدويًا.',
     'benefit1': 'المحاذاة بالمرجع — دقّة عالية للتلاوات المتّصلة',
     'benefit2': 'المصحف كامل بلا حدود مدة',
     'benefit3': 'عمليات غير محدودة تقريبًا',
@@ -174,6 +194,7 @@ const Map<String, Map<String, String>> _strings = {
     'restore': 'Restore purchase',
     'yearlySub': 'Yearly subscription',
     'subscribed': 'Subscription activated. Thank you!',
+    'billingUnavailable': 'Purchase unavailable: this app must be installed from Google Play (at least internal testing) with an active subscription product. Billing will not work in a manually-installed APK.',
     'benefit1': 'Reference alignment — high precision for continuous recitations',
     'benefit2': 'Full Quran with no duration limits',
     'benefit3': 'Virtually unlimited jobs',

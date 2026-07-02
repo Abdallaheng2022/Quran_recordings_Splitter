@@ -13,7 +13,7 @@ dependencies:
   http: ^1.2.0                 # نداءات الـ API
   in_app_purchase: ^3.2.0     # اشتراك Google Play Billing
   file_picker: ^8.0.0         # اختيار ملف الصوت
-  just_audio: ^0.9.34
+  just_audio: ^0.10.0
   path_provider: ^2.1.0       # حفظ ملف الـ zip
   shared_preferences: ^2.2.0  # حفظ توكن الدخول
 

@@ -14,7 +14,7 @@ class PaywallScreen extends StatefulWidget {
   State<PaywallScreen> createState() => _PaywallScreenState();
 }
 
-class _PaywallScreenState extends State<PaywallScreen> {
+class _PaywallScreenState extends State<PaywallScreen> with LocaleRebuild<PaywallScreen> {
   late final BillingService _billing;
   bool _busy = false;
   bool _ready = false;
@@ -32,7 +32,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
     _billing.onPurchaseSuccess = () {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(t('subscribed'))));
+          const SnackBar(content: Text(t('subscribed'))));
       Navigator.of(context).pop(true);
     };
     _init();
@@ -57,8 +57,8 @@ class _PaywallScreenState extends State<PaywallScreen> {
         backgroundColor: Mushaf.background,
         elevation: 0,
         foregroundColor: Mushaf.foreground,
-        title: Text(t('paidTier'),
-            style: const TextStyle(fontWeight: FontWeight.w800)),
+        title: const Text(t('paidTier'),
+            style: TextStyle(fontWeight: FontWeight.w800)),
         centerTitle: true,
       ),
       body: ListView(
@@ -89,9 +89,9 @@ class _PaywallScreenState extends State<PaywallScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          Text(t('yearlySub'),
+          const Text(t('yearlySub'),
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.w800,
                   color: Mushaf.foreground)),
@@ -140,11 +140,11 @@ class _PaywallScreenState extends State<PaywallScreen> {
                     width: 22,
                     child: CircularProgressIndicator(
                         strokeWidth: 2, color: Mushaf.primaryForeground))
-                : Text(t('subscribe')),
+                : const Text(t('subscribe')),
           ),
           TextButton(
             onPressed: _busy ? null : _billing.restore,
-            child: Text(t('restore')),
+            child: const Text(t('restore')),
           ),
           if (_msg != null)
             Padding(

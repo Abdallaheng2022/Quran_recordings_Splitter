@@ -12,6 +12,7 @@
 import 'dart:async';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'api.dart';
+import 'l10n.dart';
 
 // عدّله ليطابق معرّف منتج الاشتراك في Play Console (وأيضًا PLAY_SUBSCRIPTION_IDS بالسيرفر).
 const String kSubscriptionId = 'quran_pro_yearly';
@@ -34,7 +35,7 @@ class BillingService {
   Future<void> init() async {
     available = await _iap.isAvailable();
     if (!available) {
-      onError?.call('متجر Google Play غير متاح على هذا الجهاز.');
+      onError?.call(t('billingUnavailable'));
       return;
     }
     _sub = _iap.purchaseStream.listen(_onPurchases, onError: (e) {
@@ -44,7 +45,7 @@ class BillingService {
     if (resp.productDetails.isNotEmpty) {
       product = resp.productDetails.first;
     } else {
-      onError?.call('لم يُعثر على منتج الاشتراك "$kSubscriptionId" في Play Console.');
+      onError?.call(t('billingUnavailable'));
     }
   }
 
