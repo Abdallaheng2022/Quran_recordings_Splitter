@@ -2,6 +2,7 @@
 //
 // عدّل عنوان السيرفر إمّا هنا في kDefaultBaseUrl، أو عند البناء عبر:
 //   flutter build apk --dart-define=API_BASE=https://your-server.com
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
@@ -69,7 +70,14 @@ class Api {
     await _saveToken(null);
   }
 
-  /// يجلب الاستحقاق: المستوى + الحدود + استهلاك اليوم.
+  Future<ApiResult> requestReset(String email) =>
+      _postJson('/api/password/request-reset', {'email': email});
+
+  Future<ApiResult> resetPassword(String email, String code, String password) =>
+      _postJson('/api/password/reset',
+          {'email': email, 'code': code, 'password': password});
+
+    /// يجلب الاستحقاق: المستوى + الحدود + استهلاك اليوم.
   Future<ApiResult> me() => _getJson('/api/me');
 
   /// قائمة القرّاء المرجعيين المتاحين على السيرفر.
@@ -94,10 +102,17 @@ class Api {
     };
     final uri = Uri.parse('$baseUrl/api/analyze').replace(queryParameters: qp);
     try {
-      final resp = await http.post(uri,
-          headers: {..._authHeaders, 'Content-Type': 'application/octet-stream'},
-          body: audio);
+      final resp = await http
+          .post(uri,
+              headers: {..._authHeaders, 'Content-Type': 'application/octet-stream'},
+              body: audio)
+          .timeout(const Duration(seconds: 480));
       return _decode(resp);
+    } on TimeoutException {
+      return ApiResult(false, 0, {
+        'error': 'انتهت المهلة. السيرفر قد يكون نائمًا (يصحو خلال دقيقة) '
+            'أو الملف كبير — انتظر قليلًا وأعد المحاولة.'
+      });
     } catch (e) {
       return ApiResult(false, 0, {'error': 'تعذّر الاتصال بالسيرفر: $e'});
     }
@@ -107,14 +122,19 @@ class Api {
   Future<ApiResult> save(String sessionToken, List bounds) async {
     final uri = Uri.parse('$baseUrl/api/save');
     try {
-      final resp = await http.post(uri,
-          headers: {..._authHeaders, 'Content-Type': 'application/json'},
-          body: jsonEncode({'token': sessionToken, 'bounds': bounds}));
+      final resp = await http
+          .post(uri,
+              headers: {..._authHeaders, 'Content-Type': 'application/json'},
+              body: jsonEncode({'token': sessionToken, 'bounds': bounds}))
+          .timeout(const Duration(seconds: 480));
       if (resp.statusCode == 200 &&
           (resp.headers['content-type']?.contains('zip') ?? false)) {
         return ApiResult(true, 200, {}, bytes: resp.bodyBytes);
       }
       return _decode(resp);
+    } on TimeoutException {
+      return ApiResult(false, 0,
+          {'error': 'انتهت المهلة أثناء تجهيز الملف. أعد المحاولة.'});
     } catch (e) {
       return ApiResult(false, 0, {'error': 'تعذّر تحميل الملف: $e'});
     }
@@ -128,10 +148,14 @@ class Api {
   // ----- مساعدات -----
   Future<ApiResult> _postJson(String path, Map body) async {
     try {
-      final resp = await http.post(Uri.parse('$baseUrl$path'),
-          headers: {..._authHeaders, 'Content-Type': 'application/json'},
-          body: jsonEncode(body));
+      final resp = await http
+          .post(Uri.parse('$baseUrl$path'),
+              headers: {..._authHeaders, 'Content-Type': 'application/json'},
+              body: jsonEncode(body))
+          .timeout(const Duration(seconds: 30));
       return _decode(resp);
+    } on TimeoutException {
+      return ApiResult(false, 0, {'error': 'انتهت المهلة — السيرفر قد يكون نائمًا. أعد المحاولة بعد لحظات.'});
     } catch (e) {
       return ApiResult(false, 0, {'error': 'تعذّر الاتصال بالسيرفر: $e'});
     }
@@ -139,15 +163,25 @@ class Api {
 
   Future<ApiResult> _getJson(String path) async {
     try {
-      final resp =
-          await http.get(Uri.parse('$baseUrl$path'), headers: _authHeaders);
+      final resp = await http
+          .get(Uri.parse('$baseUrl$path'), headers: _authHeaders)
+          .timeout(const Duration(seconds: 30));
       return _decode(resp);
+    } on TimeoutException {
+      return ApiResult(false, 0, {'error': 'انتهت المهلة — السيرفر قد يكون نائمًا. أعد المحاولة بعد لحظات.'});
     } catch (e) {
       return ApiResult(false, 0, {'error': 'تعذّر الاتصال بالسيرفر: $e'});
     }
   }
 
+  /// يُستدعى عند اكتشاف جلسة منتهية (401) — يُمسح التوكن.
+  void Function()? onSessionExpired;
+
   ApiResult _decode(http.Response resp) {
+    if (resp.statusCode == 401) {
+      _saveToken(null);
+      onSessionExpired?.call();
+    }
     Map<String, dynamic> data = {};
     try {
       final parsed = jsonDecode(utf8.decode(resp.bodyBytes));

@@ -53,11 +53,15 @@ class _BootstrapState extends State<_Bootstrap> {
   }
 
   Future<void> _check() async {
+    // جلسة منتهية (401) في أي نداء → عودة تلقائية لشاشة الدخول
+    api.onSessionExpired = () {
+      if (mounted) setState(() => _loggedIn = false);
+    };
     await api.loadToken();
     if (api.token != null) {
-      final r = await api.me();
-      _loggedIn = r.ok && r.data['ok'] == true;
-      if (!_loggedIn) await api.logout();
+      // لو عندنا توكن محفوظ، ادخل مباشرة دون انتظار السيرفر (قد يكون نائمًا).
+      // التحقق يحدث لاحقًا داخل الشاشات؛ التوكن غير الصالح يُكتشف عند أول نداء.
+      _loggedIn = true;
     }
     if (mounted) setState(() => _loading = false);
   }

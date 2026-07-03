@@ -14,7 +14,7 @@ class PaywallScreen extends StatefulWidget {
   State<PaywallScreen> createState() => _PaywallScreenState();
 }
 
-class _PaywallScreenState extends State<PaywallScreen> {
+class _PaywallScreenState extends State<PaywallScreen> with LocaleRebuild<PaywallScreen> {
   late final BillingService _billing;
   bool _busy = false;
   bool _ready = false;
@@ -58,7 +58,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
         elevation: 0,
         foregroundColor: Mushaf.foreground,
         title: Text(t('paidTier'),
-            style: const TextStyle(fontWeight: FontWeight.w800)),
+            style: TextStyle(fontWeight: FontWeight.w800)),
         centerTitle: true,
       ),
       body: ListView(
@@ -91,7 +91,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
           const SizedBox(height: 16),
           Text(t('yearlySub'),
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.w800,
                   color: Mushaf.foreground)),

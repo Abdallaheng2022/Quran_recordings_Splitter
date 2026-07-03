@@ -1,12 +1,12 @@
-// editor.dart — محرر المقاطع.
-// التشغيل: نحمّل الملف كاملًا مرة واحدة، وكل مقطع يُشغَّل بالقفز لبدايته
-// (seek) والإيقاف تلقائيًا عند نهايته — أمتن من setClip. المؤشر يظهر دائمًا
-// للمقطع النشط، يتحرك مع الصوت، وقابل للسحب للاستماع من أي موضع.
-// الحدود مشتركة: نهاية مقطع = بداية التالي، فسحب حدٍّ يزيح جاره تلقائيًا.
+// editor.dart — محرر المقاطع (مكتبة audioplayers).
+// نحمّل الملف مرة واحدة، وكل مقطع يُشغَّل بالقفز لبدايته (seek + resume)
+// والإيقاف تلقائيًا عند نهايته. المؤشر يظهر دائمًا للمقطع النشط، يتحرك مع
+// الصوت، وقابل للسحب للاستماع من أي موضع. الحدود مشتركة: سحب حدٍّ يزيح جاره.
 import 'dart:async';
+import 'dart:io';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:just_audio/just_audio.dart';
 import '../api.dart';
 import '../l10n.dart';
 import '../theme.dart';
@@ -32,17 +32,19 @@ class EditorScreen extends StatefulWidget {
   State<EditorScreen> createState() => _EditorScreenState();
 }
 
-class _EditorScreenState extends State<EditorScreen> with LocaleRebuild<EditorScreen> {
-  final _player = AudioPlayer();
-  late List<double> _edges; // edges[i] = بداية i = نهاية i-1
+class _EditorScreenState extends State<EditorScreen>
+    with LocaleRebuild<EditorScreen> {
+  final AudioPlayer _player = AudioPlayer();
+  late List<double> _edges;
   int? _active;
   double _absPos = 0;
   bool _isPlaying = false;
   bool _dragging = false;
   bool _ready = false;
+  String? _loadError;
   bool _saving = false;
   StreamSubscription<Duration>? _posSub;
-  StreamSubscription<bool>? _stSub;
+  StreamSubscription<PlayerState>? _stSub;
 
   static const _minGap = 0.3;
 
@@ -60,25 +62,48 @@ class _EditorScreenState extends State<EditorScreen> with LocaleRebuild<EditorSc
 
   Future<void> _init() async {
     try {
-      await _player.setFilePath(widget.audioPath);
-      _ready = true;
-    } catch (_) {
+      final f = File(widget.audioPath);
+      if (!await f.exists() || await f.length() == 0) {
+        _loadError = 'تعذّر قراءة الملف الصوتي للتشغيل.';
+      } else {
+        await _player.setReleaseMode(ReleaseMode.stop);
+        await _player.setVolume(1.0);
+        // مهم لأندرويد: وجّه الصوت لمسار الوسائط المسموع (لا سمّاعة المكالمات)
+        try {
+          await _player.setAudioContext(AudioContext(
+            android: AudioContextAndroid(
+              isSpeakerphoneOn: false,
+              stayAwake: true,
+              contentType: AndroidContentType.music,
+              usageType: AndroidUsageType.media,
+              audioFocus: AndroidAudioFocus.gain,
+            ),
+          ));
+        } catch (_) {}
+        _ready = true;
+      }
+    } catch (e) {
       _ready = false;
+      _loadError = 'تعذّر تشغيل الملف: $e';
     }
-    _posSub = _player.positionStream.listen((d) {
+
+    _posSub = _player.onPositionChanged.listen((d) {
+      if (_dragging) return;
       _absPos = d.inMilliseconds / 1000.0;
-      if (_active != null && _isPlaying && !_dragging) {
+      if (_active != null && _isPlaying) {
         final end = _edges[_active! + 1];
         if (_absPos >= end) {
           _player.pause();
           _absPos = end;
         }
       }
-      if (mounted && !_dragging) setState(() {});
+      if (mounted) setState(() {});
     });
-    _stSub = _player.playingStream.listen((p) {
-      if (mounted) setState(() => _isPlaying = p);
+    _stSub = _player.onPlayerStateChanged.listen((st) {
+      final playing = st == PlayerState.playing;
+      if (mounted) setState(() => _isPlaying = playing);
     });
+
     if (mounted) setState(() {});
   }
 
@@ -90,14 +115,30 @@ class _EditorScreenState extends State<EditorScreen> with LocaleRebuild<EditorSc
     super.dispose();
   }
 
+  bool _started = false; // هل بدأ تحميل المصدر مرة؟
+
   Future<void> _play(int i, {double? fromAbs}) async {
-    final start = _edges[i];
-    final from = fromAbs ?? start;
-    setState(() => _active = i);
+    final from = fromAbs ?? _edges[i];
+    setState(() {
+      _active = i;
+      _absPos = from;
+      _loadError = null;
+    });
     try {
-      await _player.seek(Duration(milliseconds: (from * 1000).round()));
-      await _player.play();
-    } catch (_) {}
+      if (!_started) {
+        // play(source) يجهّز الملف ويبدأ التشغيل معًا (موثوق على أندرويد)
+        await _player.setVolume(1.0);
+        await _player.play(DeviceFileSource(widget.audioPath), volume: 1.0);
+        _started = true;
+      } else {
+        await _player.resume();
+      }
+      if (from > 0.05) {
+        await _player.seek(Duration(milliseconds: (from * 1000).round()));
+      }
+    } catch (e) {
+      setState(() => _loadError = 'تعذّر التشغيل: $e');
+    }
   }
 
   Future<void> _toggle(int i) async {
@@ -106,7 +147,7 @@ class _EditorScreenState extends State<EditorScreen> with LocaleRebuild<EditorSc
       return;
     }
     final resume =
-        _active == i && _absPos > _edges[i] && _absPos < _edges[i + 1];
+        _active == i && _absPos > _edges[i] && _absPos < _edges[i + 1] - 0.05;
     await _play(i, fromAbs: resume ? _absPos : _edges[i]);
   }
 
@@ -172,6 +213,19 @@ class _EditorScreenState extends State<EditorScreen> with LocaleRebuild<EditorSc
                 style: const TextStyle(
                     fontSize: 13, color: Mushaf.mutedForeground)),
           ),
+          if (_loadError != null)
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Mushaf.destructive.withOpacity(.10),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(_loadError!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      fontSize: 12.5, color: Mushaf.destructive)),
+            ),
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
@@ -214,7 +268,8 @@ class _EditorScreenState extends State<EditorScreen> with LocaleRebuild<EditorSc
     final label = i < widget.labels.length && widget.labels[i].isNotEmpty
         ? widget.labels[i]
         : '${i + 1}';
-    final rel = (_absPos - start).clamp(0.0, (end - start)).toDouble();
+    final span = (end - start).clamp(0.1, double.infinity).toDouble();
+    final rel = (_absPos - start).clamp(0.0, span).toDouble();
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -292,7 +347,7 @@ class _EditorScreenState extends State<EditorScreen> with LocaleRebuild<EditorSc
                   ),
                   child: Slider(
                     min: 0,
-                    max: (end - start).clamp(0.1, double.infinity).toDouble(),
+                    max: span,
                     value: rel,
                     onChangeStart: (_) {
                       _dragging = true;

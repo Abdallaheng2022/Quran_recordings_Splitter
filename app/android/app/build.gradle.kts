@@ -21,7 +21,7 @@ android {
 
     defaultConfig {
         applicationId = "com.quransplitter.app"
-        minSdk = flutter.minSdkVersion
+        minSdk = 23
         targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName

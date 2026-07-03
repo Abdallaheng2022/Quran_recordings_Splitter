@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import '../api.dart';
 import '../l10n.dart';
+import 'reset_password.dart';
 import '../theme.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -144,7 +145,17 @@ class _LoginScreenState extends State<LoginScreen> with LocaleRebuild<LoginScree
                       )
                     : Text(_registerMode ? t('createAccount') : t('login')),
               ),
-              const SizedBox(height: 26),
+              const SizedBox(height: 10),
+              if (!_registerMode)
+                TextButton(
+                  onPressed: _busy
+                      ? null
+                      : () => Navigator.of(context).push(MaterialPageRoute(
+                          builder: (_) =>
+                              ResetPasswordScreen(api: widget.api))),
+                  child: Text(t('forgotPassword')),
+                ),
+              const SizedBox(height: 16),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [

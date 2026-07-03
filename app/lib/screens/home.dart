@@ -84,41 +84,58 @@ class _HomeScreenState extends State<HomeScreen> with LocaleRebuild<HomeScreen> 
       : '${s.number}. ${s.latin}';
 
   Future<void> _pickAudio() async {
+    // withData: false — لا نحمّل الملف في الذاكرة عبر قناة النظام (يجمّد الملفات
+    // الكبيرة). نأخذ المسار وننسخه نسخًا قرصيًا سريعًا لاسم ASCII آمن للتشغيل.
     final res = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['mp3', 'm4a', 'wav', 'ogg', 'aac', 'opus'],
-      withData: true,
+      withData: false,
     );
     if (res == null || res.files.isEmpty) return;
     final f = res.files.first;
-    // نسخة محلية للتشغيل داخل المحرر
     String? path = f.path;
-    if (path == null && f.bytes != null) {
-      final dir = await getTemporaryDirectory();
-      path = '${dir.path}/picked_${DateTime.now().millisecondsSinceEpoch}'
-          '_${f.name}';
-      await File(path).writeAsBytes(f.bytes!);
-    }
+    try {
+      if (f.path != null) {
+        final dir = await getTemporaryDirectory();
+        final ext = f.extension ?? 'mp3';
+        final dst =
+            '${dir.path}/clip_${DateTime.now().millisecondsSinceEpoch}.$ext';
+        await File(f.path!).copy(dst); // نسخ قرصي — بلا تحميل في الذاكرة
+        path = dst;
+      }
+    } catch (_) {}
     setState(() {
       _fileName = f.name;
-      _fileBytes = f.bytes;
+      _fileBytes = null; // لا نحتفظ بالبايتات؛ تُقرأ وقت الرفع فقط
       _localPath = path;
       _status = null;
     });
   }
 
   Future<void> _run() async {
-    if (_fileBytes == null || _localPath == null) {
+    if (_localPath == null) {
       setState(() => _status = t('pickFirst'));
       return;
     }
     setState(() {
       _busy = true;
-      _status = t('analyzing');
+      _status = t('analyzingLong');
     });
 
+    // اقرأ البايتات وقت الرفع فقط (يقلّل استهلاك الذاكرة للملفات الكبيرة)
+    Uint8List audioBytes;
+    try {
+      audioBytes = await File(_localPath!).readAsBytes();
+    } catch (e) {
+      setState(() {
+        _busy = false;
+        _status = t('pickFirst');
+      });
+      return;
+    }
+
     final analyze = await widget.api.analyze(
-      audio: _fileBytes!,
+      audio: audioBytes,
       name: _fileName ?? 'audio.mp3',
       range: _rangeParam,
       level: _level,
