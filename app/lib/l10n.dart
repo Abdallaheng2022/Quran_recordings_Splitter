@@ -67,6 +67,10 @@ mixin LocaleRebuild<T extends StatefulWidget> on State<T> {
 const Map<String, Map<String, String>> _strings = {
   'ar': {
     'appTitle': 'مُقسّم التلاوة',
+    'segmentCount': 'مقطع',
+    'secondsShort': 'ث',
+    'endLabel': 'النهاية',
+    'startLabel': 'البداية',
     'forgotPassword': 'نسيت كلمة المرور؟',
     'resetDone': 'تم تغيير كلمة المرور. سجّل الدخول بها.',
     'resetResend': 'إعادة إرسال الرمز',
@@ -146,6 +150,10 @@ const Map<String, Map<String, String>> _strings = {
   },
   'en': {
     'appTitle': 'Quran Splitter',
+    'segmentCount': 'clips',
+    'secondsShort': 's',
+    'endLabel': 'End',
+    'startLabel': 'Start',
     'forgotPassword': 'Forgot password?',
     'resetDone': 'Password changed. Sign in with it.',
     'resetResend': 'Resend code',
@@ -225,6 +233,10 @@ const Map<String, Map<String, String>> _strings = {
   },
   'tr': {
     'appTitle': 'Tilavet Bölücü',
+    'segmentCount': 'parca',
+    'secondsShort': 'sn',
+    'endLabel': 'Bitis',
+    'startLabel': 'Baslangic',
     'forgotPassword': 'Sifrenizi mi unuttunuz?',
     'resetDone': 'Sifre degistirildi. Giris yapin.',
     'resetResend': 'Kodu tekrar gonder',
@@ -304,6 +316,10 @@ const Map<String, Map<String, String>> _strings = {
   },
   'hi': {
     'appTitle': 'क़ुरआन स्प्लिटर',
+    'segmentCount': 'क्लिप',
+    'secondsShort': 'से',
+    'endLabel': 'अंत',
+    'startLabel': 'शुरू',
     'forgotPassword': 'पासवर्ड भूल गए?',
     'resetDone': 'पासवर्ड बदला गया। इससे साइन इन करें।',
     'resetResend': 'कोड फिर भेजें',
@@ -383,6 +399,10 @@ const Map<String, Map<String, String>> _strings = {
   },
   'es': {
     'appTitle': 'Divisor de Recitación',
+    'segmentCount': 'clips',
+    'secondsShort': 's',
+    'endLabel': 'Fin',
+    'startLabel': 'Inicio',
     'forgotPassword': 'Olvidaste tu contrasena?',
     'resetDone': 'Contrasena cambiada. Inicia sesion.',
     'resetResend': 'Reenviar codigo',
@@ -462,6 +482,10 @@ const Map<String, Map<String, String>> _strings = {
   },
   'de': {
     'appTitle': 'Rezitations-Splitter',
+    'segmentCount': 'Clips',
+    'secondsShort': 's',
+    'endLabel': 'Ende',
+    'startLabel': 'Start',
     'forgotPassword': 'Passwort vergessen?',
     'resetDone': 'Passwort geaendert. Melde dich an.',
     'resetResend': 'Code erneut senden',
@@ -541,6 +565,10 @@ const Map<String, Map<String, String>> _strings = {
   },
   'fr': {
     'appTitle': 'Diviseur de Récitation',
+    'segmentCount': 'clips',
+    'secondsShort': 's',
+    'endLabel': 'Fin',
+    'startLabel': 'Debut',
     'forgotPassword': 'Mot de passe oublie ?',
     'resetDone': 'Mot de passe modifie. Connectez-vous.',
     'resetResend': 'Renvoyer le code',

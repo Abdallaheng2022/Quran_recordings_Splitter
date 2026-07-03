@@ -259,6 +259,69 @@ class _EditorScreenState extends State<EditorScreen>
     );
   }
 
+  // تنسيق دقيق بأعشار الثانية (مثل fmtPrecise في Expo)
+  String _fmtP(double s) {
+    final tenths = (s * 10).round();
+    final m = tenths ~/ 600;
+    final sec = (tenths % 600) / 10;
+    return '$m:${sec.toStringAsFixed(1).padLeft(4, '0')}';
+  }
+
+  void _nudge(int i, bool isStart, double delta) {
+    setState(() {
+      if (isStart) {
+        final lo = i == 0 ? 0.0 : _edges[i - 1] + _minGap;
+        _edges[i] = (_edges[i] + delta).clamp(lo, _edges[i + 1] - _minGap);
+      } else {
+        final hi = i == _n - 1 ? widget.duration : _edges[i + 2] - _minGap;
+        _edges[i + 1] = (_edges[i + 1] + delta).clamp(_edges[i] + _minGap, hi);
+      }
+    });
+  }
+
+  Widget _adjust(String title, String value, VoidCallback onMinus,
+      VoidCallback onPlus) {
+    return Expanded(
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        decoration: BoxDecoration(
+          border: Border.all(color: Mushaf.border),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            _stepBtn(Icons.remove, onMinus),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(title,
+                      style: const TextStyle(
+                          fontSize: 11, color: Mushaf.mutedForeground)),
+                  Text(value,
+                      style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          color: Mushaf.foreground)),
+                ],
+              ),
+            ),
+            _stepBtn(Icons.add, onPlus),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _stepBtn(IconData icon, VoidCallback onTap) => InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Icon(icon, size: 20, color: Mushaf.foreground),
+        ),
+      );
+
   Widget _segmentCard(int i) {
     final start = _edges[i], end = _edges[i + 1];
     final isActive = _active == i;
@@ -269,113 +332,81 @@ class _EditorScreenState extends State<EditorScreen>
         ? widget.labels[i]
         : '${i + 1}';
     final span = (end - start).clamp(0.1, double.infinity).toDouble();
-    final rel = (_absPos - start).clamp(0.0, span).toDouble();
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
       decoration: BoxDecoration(
         color: Mushaf.card,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: isActive ? Mushaf.primary : Mushaf.border,
-          width: isActive ? 1.4 : 0.6,
+          width: isActive ? 1.6 : 0.6,
         ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ── العنوان: زر تشغيل + اسم المقطع + (البداية ← النهاية · المدة) ──
           Row(
             children: [
               InkWell(
                 onTap: _ready ? () => _toggle(i) : null,
-                borderRadius: BorderRadius.circular(22),
+                borderRadius: BorderRadius.circular(24),
                 child: Container(
-                  width: 42,
-                  height: 42,
+                  width: 44,
+                  height: 44,
                   decoration: BoxDecoration(
-                    color: playingThis
-                        ? Mushaf.primary
-                        : Mushaf.primary.withOpacity(.10),
+                    color: playingThis ? Mushaf.accent : Mushaf.primary,
                     shape: BoxShape.circle,
                   ),
                   child: Icon(playingThis ? Icons.pause : Icons.play_arrow,
                       color: playingThis
-                          ? Mushaf.primaryForeground
-                          : Mushaf.primary),
+                          ? Mushaf.accentForeground
+                          : Mushaf.primaryForeground),
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('${i + 1}. $label',
-                        maxLines: 1,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                            fontSize: 14,
+                            fontSize: 15,
                             fontWeight: FontWeight.w700,
                             color: Mushaf.foreground)),
-                    Text('${_fmt(start)} ← ${_fmt(end)}',
-                        style: const TextStyle(
-                            fontSize: 12, color: Mushaf.mutedForeground)),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${_fmtP(start)} ← ${_fmtP(end)}  ·  '
+                      '${span.toStringAsFixed(1)} ${t('secondsShort')}',
+                      style: const TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: Mushaf.mutedForeground),
+                    ),
                   ],
                 ),
               ),
             ],
           ),
-          Row(
-            children: [
-              SizedBox(
-                width: 42,
-                child: Text(_fmt(start + rel),
-                    style: const TextStyle(
-                        fontSize: 11, color: Mushaf.mutedForeground)),
-              ),
-              Expanded(
-                child: SliderTheme(
-                  data: SliderTheme.of(context).copyWith(
-                    activeTrackColor: Mushaf.accent,
-                    inactiveTrackColor: Mushaf.muted,
-                    thumbColor: Mushaf.accent,
-                    thumbShape:
-                        const RoundSliderThumbShape(enabledThumbRadius: 7),
-                    overlayShape:
-                        const RoundSliderOverlayShape(overlayRadius: 14),
-                    trackHeight: 3,
-                  ),
-                  child: Slider(
-                    min: 0,
-                    max: span,
-                    value: rel,
-                    onChangeStart: (_) {
-                      _dragging = true;
-                      setState(() => _active = i);
-                    },
-                    onChanged: (v) => setState(() => _absPos = start + v),
-                    onChangeEnd: (v) async {
-                      _dragging = false;
-                      await _play(i, fromAbs: start + v);
-                    },
-                  ),
-                ),
-              ),
-            ],
-          ),
-          Row(
-            children: [
-              const SizedBox(width: 42),
-              Expanded(
-                child: SliderTheme(
+          const SizedBox(height: 8),
+          // ── الشريط: دائمًا يسار→يمين. مقبضان (بداية/نهاية) + مؤشر التشغيل ──
+          Directionality(
+            textDirection: TextDirection.ltr,
+            child: Column(
+              children: [
+                SliderTheme(
                   data: SliderTheme.of(context).copyWith(
                     activeTrackColor: Mushaf.primary,
                     inactiveTrackColor: Mushaf.muted,
                     rangeThumbShape: const RoundRangeSliderThumbShape(
-                        enabledThumbRadius: 8),
+                        enabledThumbRadius: 9),
                     overlayShape:
-                        const RoundSliderOverlayShape(overlayRadius: 14),
-                    trackHeight: 3,
+                        const RoundSliderOverlayShape(overlayRadius: 16),
+                    trackHeight: 4,
                   ),
                   child: RangeSlider(
                     min: lo,
@@ -393,7 +424,48 @@ class _EditorScreenState extends State<EditorScreen>
                     },
                   ),
                 ),
-              ),
+                // مؤشر التشغيل (ذهبي) — على نفس مقياس المحدّدات [lo, hi] تمامًا
+                // مثل Expo، فيتحرك بين مقبضَي البداية والنهاية بالضبط. مقيّد إلى
+                // [start, end] فلا يخرج عن حدود المقطع. المسار شفاف: تظهر النقطة فقط.
+                if (isActive)
+                  SliderTheme(
+                    data: SliderTheme.of(context).copyWith(
+                      activeTrackColor: Colors.transparent,
+                      inactiveTrackColor: Colors.transparent,
+                      thumbColor: Mushaf.accent,
+                      thumbShape: const RoundSliderThumbShape(
+                          enabledThumbRadius: 7),
+                      overlayShape:
+                          const RoundSliderOverlayShape(overlayRadius: 12),
+                      trackHeight: 2,
+                    ),
+                    child: Slider(
+                      min: lo,
+                      max: hi,
+                      value: _absPos.clamp(start, end).toDouble(),
+                      onChangeStart: (_) {
+                        _dragging = true;
+                        setState(() => _active = i);
+                      },
+                      onChanged: (v) =>
+                          setState(() => _absPos = v.clamp(start, end).toDouble()),
+                      onChangeEnd: (v) async {
+                        _dragging = false;
+                        await _play(i, fromAbs: v.clamp(start, end).toDouble());
+                      },
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 6),
+          // ── صفّان محدّدان بالاسم: البداية / النهاية (يشيلان الغموض) ──
+          Row(
+            children: [
+              _adjust(t('startLabel'), _fmtP(start),
+                  () => _nudge(i, true, -0.3), () => _nudge(i, true, 0.3)),
+              _adjust(t('endLabel'), _fmtP(end),
+                  () => _nudge(i, false, -0.3), () => _nudge(i, false, 0.3)),
             ],
           ),
         ],
