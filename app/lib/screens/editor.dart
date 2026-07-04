@@ -261,10 +261,10 @@ class _EditorScreenState extends State<EditorScreen>
 
   // تنسيق دقيق بأعشار الثانية (مثل fmtPrecise في Expo)
   String _fmtP(double s) {
-    final tenths = (s * 10).round();
-    final m = tenths ~/ 600;
-    final sec = (tenths % 600) / 10;
-    return '$m:${sec.toStringAsFixed(1).padLeft(4, '0')}';
+    final ms = (s * 1000).round();
+    final m = ms ~/ 60000;
+    final sec = (ms % 60000) / 1000;
+    return '$m:${sec.toStringAsFixed(3).padLeft(6, '0')}';
   }
 
   void _nudge(int i, bool isStart, double delta) {
@@ -313,14 +313,23 @@ class _EditorScreenState extends State<EditorScreen>
     );
   }
 
-  Widget _stepBtn(IconData icon, VoidCallback onTap) => InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
-        child: Padding(
-          padding: const EdgeInsets.all(10),
-          child: Icon(icon, size: 20, color: Mushaf.foreground),
-        ),
-      );
+  Widget _stepBtn(IconData icon, VoidCallback onTap) {
+    Timer? holdTimer;
+    return GestureDetector(
+      onTap: onTap,
+      // ضغط مطوّل = تحريك مستمر (خطوة المللي ثانية تصبح عملية)
+      onLongPressStart: (_) {
+        holdTimer = Timer.periodic(
+            const Duration(milliseconds: 30), (_) => onTap());
+      },
+      onLongPressEnd: (_) => holdTimer?.cancel(),
+      onLongPressCancel: () => holdTimer?.cancel(),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Icon(icon, size: 20, color: Mushaf.foreground),
+      ),
+    );
+  }
 
   Widget _segmentCard(int i) {
     final start = _edges[i], end = _edges[i + 1];
@@ -393,11 +402,9 @@ class _EditorScreenState extends State<EditorScreen>
             ],
           ),
           const SizedBox(height: 8),
-          // ── الشريط: دائمًا يسار→يمين. مقبضان (بداية/نهاية) + مؤشر التشغيل ──
-          Directionality(
-            textDirection: TextDirection.ltr,
-            child: Column(
-              children: [
+          // ── الشريط يتبع اتجاه لغة التطبيق (RTL عربي / LTR إنجليزي) ──
+          Column(
+            children: [
                 SliderTheme(
                   data: SliderTheme.of(context).copyWith(
                     activeTrackColor: Mushaf.primary,
@@ -457,15 +464,14 @@ class _EditorScreenState extends State<EditorScreen>
                   ),
               ],
             ),
-          ),
           const SizedBox(height: 6),
           // ── صفّان محدّدان بالاسم: البداية / النهاية (يشيلان الغموض) ──
           Row(
             children: [
               _adjust(t('startLabel'), _fmtP(start),
-                  () => _nudge(i, true, -0.3), () => _nudge(i, true, 0.3)),
+                  () => _nudge(i, true, -0.001), () => _nudge(i, true, 0.001)),
               _adjust(t('endLabel'), _fmtP(end),
-                  () => _nudge(i, false, -0.3), () => _nudge(i, false, 0.3)),
+                  () => _nudge(i, false, -0.001), () => _nudge(i, false, 0.001)),
             ],
           ),
         ],
