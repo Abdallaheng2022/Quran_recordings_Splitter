@@ -157,8 +157,8 @@ class _EditorScreenState extends State<EditorScreen>
     final bounds = [
       for (var i = 0; i < _n; i++)
         [
-          double.parse(_edges[i].toStringAsFixed(2)),
-          double.parse(_edges[i + 1].toStringAsFixed(2)),
+          double.parse(_edges[i].toStringAsFixed(3)),
+          double.parse(_edges[i + 1].toStringAsFixed(3)),
         ]
     ];
     final r = await widget.api.save(widget.sessionToken, bounds);
@@ -261,11 +261,12 @@ class _EditorScreenState extends State<EditorScreen>
 
   // تنسيق دقيق بأعشار الثانية (مثل fmtPrecise في Expo)
   String _fmtP(double s) {
-    final tenths = (s * 10).round();
-    final m = tenths ~/ 600;
-    final wholeSec = (tenths % 600) ~/ 10;
-    final dec = tenths % 10;
-    return '$m:${wholeSec.toString().padLeft(2, '0')}.$dec';
+    final ms = (s * 1000).round();
+    final m = ms ~/ 60000;
+    final wholeSec = (ms % 60000) ~/ 1000;
+    final milli = ms % 1000;
+    return '$m:${wholeSec.toString().padLeft(2, '0')}.'
+        '${milli.toString().padLeft(3, '0')}';
   }
 
   void _nudge(int i, bool isStart, double delta) {

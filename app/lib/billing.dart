@@ -1,21 +1,24 @@
-// billing.dart — اشتراك Google Play عبر in_app_purchase.
+// billing.dart — اشتراك Google Play عبر in_app_purchase (شهري + سنوي).
 //
 // التدفّق:
-//   1) نستعلم عن تفاصيل المنتج (الاشتراك) من جوجل.
-//   2) المستخدم يضغط «اشترك» → buyNonConsumable.
+//   1) نستعلم عن تفاصيل المنتجات (شهري/سنوي) من جوجل.
+//   2) المستخدم يختار خطة ويضغط «اشترك» → buyNonConsumable.
 //   3) عند نجاح الشراء نأخذ purchaseToken ونرسله للسيرفر (/api/play/verify)
 //      ليتحقّق منه عبر Google Play Developer API (لا نثق بالعميل).
 //   4) بعد تأكيد السيرفر نُكمل الشراء (completePurchase).
 //
-// مهم: الفوترة لا تعمل إلا لتطبيق مرفوع على Play Console (ولو اختبار داخلي)
-// وموقّع بمفتاح اللعب، ومُعرّف فيه منتج اشتراك بنفس kSubscriptionId.
+// مهم: الأسعار (1$ شهري / 10$ سنوي) تُضبط في Play Console عند إنشاء المنتجات،
+// لا في الكود. التطبيق يعرض السعر القادم من المتجر. والفوترة لا تعمل إلا
+// لتطبيق مرفوع على Play Console (ولو اختبار داخلي) وموقّع بمفتاح اللعب.
 import 'dart:async';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'api.dart';
 import 'l10n.dart';
 
-// عدّله ليطابق معرّف منتج الاشتراك في Play Console (وأيضًا PLAY_SUBSCRIPTION_IDS بالسيرفر).
-const String kSubscriptionId = 'quran_pro_yearly';
+// عدّلهما ليطابقا معرّفي المنتجين في Play Console (وأيضًا PLAY_SUBSCRIPTION_IDS بالسيرفر).
+const String kMonthlyId = 'quran_pro_monthly';
+const String kYearlyId = 'quran_pro_yearly';
+const Set<String> kProductIds = {kMonthlyId, kYearlyId};
 
 class BillingService {
   final Api api;
@@ -23,14 +26,16 @@ class BillingService {
   StreamSubscription<List<PurchaseDetails>>? _sub;
 
   bool available = false;
-  ProductDetails? product;
+  ProductDetails? monthly;
+  ProductDetails? yearly;
 
-  // ردود نداء للواجهة
   void Function(String message)? onError;
   void Function()? onPurchaseSuccess;
   void Function(bool busy)? onBusy;
 
   BillingService(this.api);
+
+  bool get hasAnyProduct => monthly != null || yearly != null;
 
   Future<void> init() async {
     available = await _iap.isAvailable();
@@ -39,27 +44,24 @@ class BillingService {
       return;
     }
     _sub = _iap.purchaseStream.listen(_onPurchases, onError: (e) {
-      onError?.call('خطأ في الشراء: $e');
+      onError?.call('${t('purchaseError')}: $e');
     });
-    final resp = await _iap.queryProductDetails({kSubscriptionId});
-    if (resp.productDetails.isNotEmpty) {
-      product = resp.productDetails.first;
-    } else {
+    final resp = await _iap.queryProductDetails(kProductIds);
+    for (final pd in resp.productDetails) {
+      if (pd.id == kMonthlyId) monthly = pd;
+      if (pd.id == kYearlyId) yearly = pd;
+    }
+    if (!hasAnyProduct) {
       onError?.call(t('billingUnavailable'));
     }
   }
 
-  String get priceLabel => product?.price ?? '—';
+  String priceOf(ProductDetails? p) => p?.price ?? '—';
 
-  /// يبدأ تدفّق الشراء.
-  Future<void> subscribe() async {
-    if (product == null) {
-      onError?.call('منتج الاشتراك غير جاهز.');
-      return;
-    }
+  /// يبدأ تدفّق شراء المنتج المختار.
+  Future<void> subscribe(ProductDetails product) async {
     onBusy?.call(true);
-    final param = PurchaseParam(productDetails: product!);
-    // الاشتراكات تُشترى عبر buyNonConsumable في in_app_purchase.
+    final param = PurchaseParam(productDetails: product);
     await _iap.buyNonConsumable(purchaseParam: param);
   }
 
@@ -70,29 +72,25 @@ class BillingService {
       }
       if (p.status == PurchaseStatus.error) {
         onBusy?.call(false);
-        onError?.call(p.error?.message ?? 'فشل الشراء.');
+        onError?.call(p.error?.message ?? t('purchaseFailed'));
       } else if (p.status == PurchaseStatus.purchased ||
           p.status == PurchaseStatus.restored) {
-        // purchaseToken على أندرويد = serverVerificationData
         final purchaseToken = p.verificationData.serverVerificationData;
-        final res = await api.verifyPlayPurchase(purchaseToken, kSubscriptionId);
+        final res = await api.verifyPlayPurchase(purchaseToken, p.productID);
         if (res.ok && res.data['ok'] == true) {
           onBusy?.call(false);
           onPurchaseSuccess?.call();
         } else {
           onBusy?.call(false);
-          onError?.call(res.data['error']?.toString() ??
-              'تعذّر التحقّق من الاشتراك على السيرفر.');
+          onError?.call(res.data['error']?.toString() ?? t('verifyFailed'));
         }
       }
-      // أكمل الشراء دائمًا (مطلوب وإلا يُرجَّع تلقائيًا)
       if (p.pendingCompletePurchase) {
         await _iap.completePurchase(p);
       }
     }
   }
 
-  /// استعادة المشتريات السابقة (لو غيّر الجهاز مثلًا).
   Future<void> restore() async {
     await _iap.restorePurchases();
   }

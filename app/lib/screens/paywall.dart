@@ -1,5 +1,6 @@
-// paywall.dart — شاشة الاشتراك بهوية «المصحف» (Google Play Billing).
+// paywall.dart — شاشة الاشتراك بخطتين (شهري + سنوي) بهوية «المصحف».
 import 'package:flutter/material.dart';
+import 'package:in_app_purchase/in_app_purchase.dart';
 import '../api.dart';
 import '../l10n.dart';
 import '../billing.dart';
@@ -14,11 +15,13 @@ class PaywallScreen extends StatefulWidget {
   State<PaywallScreen> createState() => _PaywallScreenState();
 }
 
-class _PaywallScreenState extends State<PaywallScreen> with LocaleRebuild<PaywallScreen> {
+class _PaywallScreenState extends State<PaywallScreen>
+    with LocaleRebuild<PaywallScreen> {
   late final BillingService _billing;
   bool _busy = false;
   bool _ready = false;
   String? _msg;
+  String _selected = kYearlyId; // السنوي مختار افتراضيًا (الأوفر)
 
   @override
   void initState() {
@@ -31,8 +34,8 @@ class _PaywallScreenState extends State<PaywallScreen> with LocaleRebuild<Paywal
     _billing.onBusy = (b) => setState(() => _busy = b);
     _billing.onPurchaseSuccess = () {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(t('subscribed'))));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(t('subscribed'))));
       Navigator.of(context).pop(true);
     };
     _init();
@@ -40,7 +43,7 @@ class _PaywallScreenState extends State<PaywallScreen> with LocaleRebuild<Paywal
 
   Future<void> _init() async {
     await _billing.init();
-    if (mounted) setState(() => _ready = _billing.product != null);
+    if (mounted) setState(() => _ready = _billing.hasAnyProduct);
   }
 
   @override
@@ -49,16 +52,25 @@ class _PaywallScreenState extends State<PaywallScreen> with LocaleRebuild<Paywal
     super.dispose();
   }
 
+  void _subscribe() {
+    final product =
+        _selected == kMonthlyId ? _billing.monthly : _billing.yearly;
+    if (product == null) {
+      setState(() => _msg = t('billingUnavailable'));
+      return;
+    }
+    _billing.subscribe(product);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final price = _billing.priceLabel;
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Mushaf.background,
         elevation: 0,
         foregroundColor: Mushaf.foreground,
         title: Text(t('paidTier'),
-            style: TextStyle(fontWeight: FontWeight.w800)),
+            style: const TextStyle(fontWeight: FontWeight.w800)),
         centerTitle: true,
       ),
       body: ListView(
@@ -89,21 +101,6 @@ class _PaywallScreenState extends State<PaywallScreen> with LocaleRebuild<Paywal
             ),
           ),
           const SizedBox(height: 16),
-          Text(t('yearlySub'),
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w800,
-                  color: Mushaf.foreground)),
-          const SizedBox(height: 6),
-          if (_ready)
-            Text(price,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    color: Mushaf.primary)),
-          const SizedBox(height: 24),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
             decoration: BoxDecoration(
@@ -131,21 +128,46 @@ class _PaywallScreenState extends State<PaywallScreen> with LocaleRebuild<Paywal
                   .toList(),
             ),
           ),
-          const SizedBox(height: 24),
-          FilledButton(
-            onPressed: (!_ready || _busy) ? null : _billing.subscribe,
-            child: _busy
-                ? const SizedBox(
-                    height: 22,
-                    width: 22,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Mushaf.primaryForeground))
-                : Text(t('subscribe')),
-          ),
-          TextButton(
-            onPressed: _busy ? null : _billing.restore,
-            child: Text(t('restore')),
-          ),
+          const SizedBox(height: 22),
+          Text(t('choosePlan'),
+              style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: Mushaf.foreground)),
+          const SizedBox(height: 12),
+          if (_ready) ...[
+            _planCard(
+              id: kMonthlyId,
+              title: t('monthlyPlan'),
+              price: _billing.priceOf(_billing.monthly),
+              per: t('perMonth'),
+              product: _billing.monthly,
+            ),
+            const SizedBox(height: 10),
+            _planCard(
+              id: kYearlyId,
+              title: t('yearlyPlan'),
+              price: _billing.priceOf(_billing.yearly),
+              per: t('perYear'),
+              product: _billing.yearly,
+              badge: t('bestValue'),
+            ),
+            const SizedBox(height: 22),
+            FilledButton(
+              onPressed: _busy ? null : _subscribe,
+              child: _busy
+                  ? const SizedBox(
+                      height: 22,
+                      width: 22,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Mushaf.primaryForeground))
+                  : Text(t('subscribe')),
+            ),
+            TextButton(
+              onPressed: _busy ? null : _billing.restore,
+              child: Text(t('restore')),
+            ),
+          ],
           if (_msg != null)
             Padding(
               padding: const EdgeInsets.only(top: 8),
@@ -161,6 +183,87 @@ class _PaywallScreenState extends State<PaywallScreen> with LocaleRebuild<Paywal
                   child: CircularProgressIndicator(color: Mushaf.primary)),
             ),
         ],
+      ),
+    );
+  }
+
+  Widget _planCard({
+    required String id,
+    required String title,
+    required String price,
+    required String per,
+    required ProductDetails? product,
+    String? badge,
+  }) {
+    final selected = _selected == id;
+    final enabled = product != null;
+    return GestureDetector(
+      onTap: enabled ? () => setState(() => _selected = id) : null,
+      child: Opacity(
+        opacity: enabled ? 1 : 0.5,
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Mushaf.card,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: selected ? Mushaf.primary : Mushaf.border,
+              width: selected ? 1.8 : 0.8,
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                selected
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_off,
+                color: selected ? Mushaf.primary : Mushaf.border,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Row(
+                  children: [
+                    Text(title,
+                        style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: Mushaf.foreground)),
+                    if (badge != null) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: Mushaf.accent.withOpacity(.18),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(badge,
+                            style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                                color: Mushaf.accentForeground)),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [
+                  Text(price,
+                      style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: Mushaf.primary)),
+                  Text(per,
+                      style: const TextStyle(
+                          fontSize: 12, color: Mushaf.mutedForeground)),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
