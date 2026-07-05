@@ -64,7 +64,7 @@ class _EditorScreenState extends State<EditorScreen>
     try {
       final f = File(widget.audioPath);
       if (!await f.exists() || await f.length() == 0) {
-        _loadError = 'تعذّر قراءة الملف الصوتي للتشغيل.';
+        _loadError = t('playbackError');
       } else {
         await _player.setReleaseMode(ReleaseMode.stop);
         await _player.setVolume(1.0);
@@ -84,7 +84,7 @@ class _EditorScreenState extends State<EditorScreen>
       }
     } catch (e) {
       _ready = false;
-      _loadError = 'تعذّر تشغيل الملف: $e';
+      _loadError = t('playbackError');
     }
 
     _posSub = _player.onPositionChanged.listen((d) {
@@ -137,7 +137,7 @@ class _EditorScreenState extends State<EditorScreen>
         await _player.seek(Duration(milliseconds: (from * 1000).round()));
       }
     } catch (e) {
-      setState(() => _loadError = 'تعذّر التشغيل: $e');
+      setState(() => _loadError = t('playbackError'));
     }
   }
 
@@ -361,12 +361,12 @@ class _EditorScreenState extends State<EditorScreen>
             TextField(
               controller: ctrl,
               autofocus: true,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: TextInputType.text,
               decoration: const InputDecoration(hintText: '0:00.0'),
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 8),
-            Text('الصيغة: دقائق:ثواني.أعشار (مثل 2:05.1)',
+            Text(t('timeFormatHint'),
                 style: const TextStyle(
                     fontSize: 12, color: Mushaf.mutedForeground)),
           ],
@@ -374,14 +374,14 @@ class _EditorScreenState extends State<EditorScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text(t('logout') == 'خروج' ? 'إلغاء' : 'Cancel'),
+            child: Text(t('cancel')),
           ),
           FilledButton(
             onPressed: () {
               final v = _parseTime(ctrl.text);
               Navigator.pop(ctx, v);
             },
-            child: Text(t('resetConfirm')),
+            child: Text(t('save')),
           ),
         ],
       ),

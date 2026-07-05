@@ -96,7 +96,19 @@ class _HomeScreenState extends State<HomeScreen> with LocaleRebuild<HomeScreen> 
     String? path = f.path;
     try {
       if (f.path != null) {
-        final dir = await getTemporaryDirectory();
+        // مجلد دائم (Support) — لا يمسحه أندرويد تلقائيًا مثل cache،
+        // فلا يختفي الملف وقت التشغيل (كان سبب خطأ FileNotFound).
+        final dir = await getApplicationSupportDirectory();
+        // نظّف المقاطع السابقة حتى لا تتراكم على التخزين
+        try {
+          for (final e in dir.listSync()) {
+            if (e is File && e.path.contains('/clip_')) {
+              try {
+                e.deleteSync();
+              } catch (_) {}
+            }
+          }
+        } catch (_) {}
         final ext = f.extension ?? 'mp3';
         final dst =
             '${dir.path}/clip_${DateTime.now().millisecondsSinceEpoch}.$ext';

@@ -67,6 +67,10 @@ mixin LocaleRebuild<T extends StatefulWidget> on State<T> {
 const Map<String, Map<String, String>> _strings = {
   'ar': {
     'appTitle': 'مُقسّم التلاوة',
+    'playbackError': 'تعذّر تشغيل هذا المقطع — قد يكون الملف الصوتي لم يعد متاحًا. عُد واختر الملف من جديد.',
+    'timeFormatHint': 'الصيغة: دقائق:ثواني.أعشار (مثل 2:05.1)',
+    'cancel': 'إلغاء',
+    'save': 'تم',
     'segmentCount': 'مقطع',
     'secondsShort': 'ث',
     'endLabel': 'النهاية',
@@ -150,6 +154,10 @@ const Map<String, Map<String, String>> _strings = {
   },
   'en': {
     'appTitle': 'Quran Splitter',
+    'playbackError': 'Could not play this segment — the audio file may no longer be available. Go back and pick the file again.',
+    'timeFormatHint': 'Format: minutes:seconds.tenths (e.g. 2:05.1)',
+    'cancel': 'Cancel',
+    'save': 'Done',
     'segmentCount': 'clips',
     'secondsShort': 's',
     'endLabel': 'End',
@@ -233,6 +241,10 @@ const Map<String, Map<String, String>> _strings = {
   },
   'tr': {
     'appTitle': 'Tilavet Bölücü',
+    'playbackError': 'Bu parca calinamadi — ses dosyasi artik mevcut olmayabilir. Geri donup dosyayi tekrar secin.',
+    'timeFormatHint': 'Bicim: dakika:saniye.ondalik (or. 2:05.1)',
+    'cancel': 'Iptal',
+    'save': 'Tamam',
     'segmentCount': 'parca',
     'secondsShort': 'sn',
     'endLabel': 'Bitis',
@@ -316,6 +328,10 @@ const Map<String, Map<String, String>> _strings = {
   },
   'hi': {
     'appTitle': 'क़ुरआन स्प्लिटर',
+    'playbackError': 'यह क्लिप नहीं चल सकी — ऑडियो फ़ाइल अब उपलब्ध नहीं हो सकती। वापस जाकर फ़ाइल फिर चुनें।',
+    'timeFormatHint': 'प्रारूप: मिनट:सेकंड.दहाई (जैसे 2:05.1)',
+    'cancel': 'रद्द करें',
+    'save': 'हो गया',
     'segmentCount': 'क्लिप',
     'secondsShort': 'से',
     'endLabel': 'अंत',
@@ -399,6 +415,10 @@ const Map<String, Map<String, String>> _strings = {
   },
   'es': {
     'appTitle': 'Divisor de Recitación',
+    'playbackError': 'No se pudo reproducir este segmento — el archivo de audio puede ya no estar disponible. Vuelve y selecciona el archivo de nuevo.',
+    'timeFormatHint': 'Formato: minutos:segundos.decimas (ej. 2:05.1)',
+    'cancel': 'Cancelar',
+    'save': 'Listo',
     'segmentCount': 'clips',
     'secondsShort': 's',
     'endLabel': 'Fin',
@@ -482,6 +502,10 @@ const Map<String, Map<String, String>> _strings = {
   },
   'de': {
     'appTitle': 'Rezitations-Splitter',
+    'playbackError': 'Dieses Segment konnte nicht abgespielt werden — die Audiodatei ist moeglicherweise nicht mehr verfuegbar. Gehe zurueck und waehle die Datei erneut.',
+    'timeFormatHint': 'Format: Minuten:Sekunden.Zehntel (z.B. 2:05.1)',
+    'cancel': 'Abbrechen',
+    'save': 'Fertig',
     'segmentCount': 'Clips',
     'secondsShort': 's',
     'endLabel': 'Ende',
@@ -565,6 +589,10 @@ const Map<String, Map<String, String>> _strings = {
   },
   'fr': {
     'appTitle': 'Diviseur de Récitation',
+    'playbackError': 'Impossible de lire ce segment — le fichier audio n est peut-etre plus disponible. Revenez et selectionnez a nouveau le fichier.',
+    'timeFormatHint': 'Format : minutes:secondes.dixiemes (ex. 2:05.1)',
+    'cancel': 'Annuler',
+    'save': 'OK',
     'segmentCount': 'clips',
     'secondsShort': 's',
     'endLabel': 'Fin',
