@@ -472,10 +472,10 @@ class _EditorScreenState extends State<EditorScreen>
                     activeTrackColor: Mushaf.primary,
                     inactiveTrackColor: Mushaf.muted,
                     rangeThumbShape: const RoundRangeSliderThumbShape(
-                        enabledThumbRadius: 9),
+                        enabledThumbRadius: 16),
                     overlayShape:
-                        const RoundSliderOverlayShape(overlayRadius: 16),
-                    trackHeight: 4,
+                        const RoundSliderOverlayShape(overlayRadius: 28),
+                    trackHeight: 7,
                   ),
                   child: RangeSlider(
                     min: lo,
@@ -503,10 +503,10 @@ class _EditorScreenState extends State<EditorScreen>
                       inactiveTrackColor: Colors.transparent,
                       thumbColor: Mushaf.accent,
                       thumbShape: const RoundSliderThumbShape(
-                          enabledThumbRadius: 7),
+                          enabledThumbRadius: 11),
                       overlayShape:
-                          const RoundSliderOverlayShape(overlayRadius: 12),
-                      trackHeight: 2,
+                          const RoundSliderOverlayShape(overlayRadius: 20),
+                      trackHeight: 4,
                     ),
                     child: Slider(
                       min: lo,
