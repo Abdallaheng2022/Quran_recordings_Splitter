@@ -397,8 +397,17 @@ class _EditorScreenState extends State<EditorScreen>
     final start = _starts[i], end = _ends[i];
     final isActive = _active == i;
     final playingThis = isActive && _isPlaying;
-    const lo = 0.0;
-    final hi = widget.duration;
+    // نافذة مقرّبة حول المقطع بدل عرض الملف كامل — فيملأ المقطع جزءًا كبيرًا
+    // من الشريط وتتباعد الدائرتان فيسهل مسكهما وتحريكهما.
+    final segLen = (end - start).clamp(0.1, double.infinity).toDouble();
+    final margin = (segLen * 0.8).clamp(1.0, 20.0).toDouble();
+    double lo = start - margin;
+    if (lo < 0) lo = 0;
+    double hi = end + margin;
+    if (hi > widget.duration) hi = widget.duration;
+    if (hi - lo < 0.5) {
+      hi = (lo + 0.5 <= widget.duration) ? lo + 0.5 : widget.duration;
+    }
     final label = i < widget.labels.length && widget.labels[i].isNotEmpty
         ? widget.labels[i]
         : '${i + 1}';
@@ -472,10 +481,10 @@ class _EditorScreenState extends State<EditorScreen>
                     activeTrackColor: Mushaf.primary,
                     inactiveTrackColor: Mushaf.muted,
                     rangeThumbShape: const RoundRangeSliderThumbShape(
-                        enabledThumbRadius: 16),
+                        enabledThumbRadius: 9),
                     overlayShape:
-                        const RoundSliderOverlayShape(overlayRadius: 28),
-                    trackHeight: 7,
+                        const RoundSliderOverlayShape(overlayRadius: 16),
+                    trackHeight: 12,
                   ),
                   child: RangeSlider(
                     min: lo,
@@ -503,10 +512,10 @@ class _EditorScreenState extends State<EditorScreen>
                       inactiveTrackColor: Colors.transparent,
                       thumbColor: Mushaf.accent,
                       thumbShape: const RoundSliderThumbShape(
-                          enabledThumbRadius: 11),
+                          enabledThumbRadius: 7),
                       overlayShape:
-                          const RoundSliderOverlayShape(overlayRadius: 20),
-                      trackHeight: 4,
+                          const RoundSliderOverlayShape(overlayRadius: 12),
+                      trackHeight: 2,
                     ),
                     child: Slider(
                       min: lo,
