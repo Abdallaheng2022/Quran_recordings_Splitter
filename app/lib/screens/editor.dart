@@ -35,7 +35,8 @@ class EditorScreen extends StatefulWidget {
 class _EditorScreenState extends State<EditorScreen>
     with LocaleRebuild<EditorScreen> {
   final AudioPlayer _player = AudioPlayer();
-  late List<double> _edges;
+  late List<double> _starts; // بداية كل مقطع (مستقلة)
+  late List<double> _ends;   // نهاية كل مقطع (مستقلة)
   int? _active;
   double _absPos = 0;
   bool _isPlaying = false;
@@ -48,15 +49,13 @@ class _EditorScreenState extends State<EditorScreen>
 
   static const _minGap = 0.3;
 
-  int get _n => _edges.length - 1;
+  int get _n => _starts.length;
 
   @override
   void initState() {
     super.initState();
-    _edges = [
-      widget.initialBounds.first[0],
-      for (final b in widget.initialBounds) b[1],
-    ];
+    _starts = [for (final b in widget.initialBounds) b[0]];
+    _ends = [for (final b in widget.initialBounds) b[1]];
     _init();
   }
 
@@ -91,7 +90,7 @@ class _EditorScreenState extends State<EditorScreen>
       if (_dragging) return;
       _absPos = d.inMilliseconds / 1000.0;
       if (_active != null && _isPlaying) {
-        final end = _edges[_active! + 1];
+        final end = _ends[_active!];
         if (_absPos >= end) {
           _player.pause();
           _absPos = end;
@@ -118,7 +117,7 @@ class _EditorScreenState extends State<EditorScreen>
   bool _started = false; // هل بدأ تحميل المصدر مرة؟
 
   Future<void> _play(int i, {double? fromAbs}) async {
-    final from = fromAbs ?? _edges[i];
+    final from = fromAbs ?? _starts[i];
     setState(() {
       _active = i;
       _absPos = from;
@@ -147,8 +146,8 @@ class _EditorScreenState extends State<EditorScreen>
       return;
     }
     final resume =
-        _active == i && _absPos > _edges[i] && _absPos < _edges[i + 1] - 0.05;
-    await _play(i, fromAbs: resume ? _absPos : _edges[i]);
+        _active == i && _absPos > _starts[i] && _absPos < _ends[i] - 0.05;
+    await _play(i, fromAbs: resume ? _absPos : _starts[i]);
   }
 
   Future<void> _save() async {
@@ -157,8 +156,8 @@ class _EditorScreenState extends State<EditorScreen>
     final bounds = [
       for (var i = 0; i < _n; i++)
         [
-          double.parse(_edges[i].toStringAsFixed(3)),
-          double.parse(_edges[i + 1].toStringAsFixed(3)),
+          double.parse(_starts[i].toStringAsFixed(3)),
+          double.parse(_ends[i].toStringAsFixed(3)),
         ]
     ];
     final r = await widget.api.save(widget.sessionToken, bounds);
@@ -272,11 +271,10 @@ class _EditorScreenState extends State<EditorScreen>
   void _nudge(int i, bool isStart, double delta) {
     setState(() {
       if (isStart) {
-        final lo = i == 0 ? 0.0 : _edges[i - 1] + _minGap;
-        _edges[i] = (_edges[i] + delta).clamp(lo, _edges[i + 1] - _minGap);
+        _starts[i] = (_starts[i] + delta).clamp(0.0, _ends[i] - _minGap);
       } else {
-        final hi = i == _n - 1 ? widget.duration : _edges[i + 2] - _minGap;
-        _edges[i + 1] = (_edges[i + 1] + delta).clamp(_edges[i] + _minGap, hi);
+        _ends[i] =
+            (_ends[i] + delta).clamp(_starts[i] + _minGap, widget.duration);
       }
     });
   }
@@ -396,11 +394,11 @@ class _EditorScreenState extends State<EditorScreen>
       _HoldButton(icon: icon, onStep: onTap);
 
   Widget _segmentCard(int i) {
-    final start = _edges[i], end = _edges[i + 1];
+    final start = _starts[i], end = _ends[i];
     final isActive = _active == i;
     final playingThis = isActive && _isPlaying;
-    final lo = i == 0 ? 0.0 : _edges[i - 1] + _minGap;
-    final hi = i == _n - 1 ? widget.duration : _edges[i + 2] - _minGap;
+    const lo = 0.0;
+    final hi = widget.duration;
     final label = i < widget.labels.length && widget.labels[i].isNotEmpty
         ? widget.labels[i]
         : '${i + 1}';
@@ -488,8 +486,8 @@ class _EditorScreenState extends State<EditorScreen>
                     ),
                     onChanged: (v) {
                       setState(() {
-                        _edges[i] = v.start;
-                        _edges[i + 1] =
+                        _starts[i] = v.start;
+                        _ends[i] =
                             v.end.clamp(v.start + _minGap, hi).toDouble();
                       });
                     },
@@ -540,9 +538,9 @@ class _EditorScreenState extends State<EditorScreen>
                 () => _editTime(
                   t('startLabel'),
                   start,
-                  i == 0 ? 0.0 : _edges[i - 1] + _minGap,
-                  _edges[i + 1] - _minGap,
-                  (v) => setState(() => _edges[i] = v),
+                  0.0,
+                  _ends[i] - _minGap,
+                  (v) => setState(() => _starts[i] = v),
                 ),
               ),
               _adjust(
@@ -553,9 +551,9 @@ class _EditorScreenState extends State<EditorScreen>
                 () => _editTime(
                   t('endLabel'),
                   end,
-                  _edges[i] + _minGap,
-                  i == _n - 1 ? widget.duration : _edges[i + 2] - _minGap,
-                  (v) => setState(() => _edges[i + 1] = v),
+                  _starts[i] + _minGap,
+                  widget.duration,
+                  (v) => setState(() => _ends[i] = v),
                 ),
               ),
             ],
