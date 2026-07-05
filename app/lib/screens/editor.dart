@@ -261,10 +261,11 @@ class _EditorScreenState extends State<EditorScreen>
 
   // تنسيق دقيق بأعشار الثانية (مثل fmtPrecise في Expo)
   String _fmtP(double s) {
-    final ms = (s * 1000).round();
-    final m = ms ~/ 60000;
-    final sec = (ms % 60000) / 1000;
-    return '$m:${sec.toStringAsFixed(3).padLeft(6, '0')}';
+    final tenths = (s * 10).round();
+    final m = tenths ~/ 600;
+    final wholeSec = (tenths % 600) ~/ 10;
+    final dec = tenths % 10;
+    return '$m:${wholeSec.toString().padLeft(2, '0')}.$dec';
   }
 
   void _nudge(int i, bool isStart, double delta) {
@@ -280,7 +281,7 @@ class _EditorScreenState extends State<EditorScreen>
   }
 
   Widget _adjust(String title, String value, VoidCallback onMinus,
-      VoidCallback onPlus) {
+      VoidCallback onPlus, VoidCallback onEdit) {
     return Expanded(
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 4),
@@ -292,18 +293,31 @@ class _EditorScreenState extends State<EditorScreen>
           children: [
             _stepBtn(Icons.remove, onMinus),
             Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(title,
-                      style: const TextStyle(
-                          fontSize: 11, color: Mushaf.mutedForeground)),
-                  Text(value,
-                      style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                          color: Mushaf.foreground)),
-                ],
+              // الضغط على القيمة يفتح إدخالًا يدويًا بالكيبورد
+              child: InkWell(
+                onTap: onEdit,
+                borderRadius: BorderRadius.circular(8),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(title,
+                        style: const TextStyle(
+                            fontSize: 11, color: Mushaf.mutedForeground)),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(value,
+                            style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                                color: Mushaf.foreground)),
+                        const SizedBox(width: 3),
+                        const Icon(Icons.edit,
+                            size: 11, color: Mushaf.mutedForeground),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
             _stepBtn(Icons.add, onPlus),
@@ -313,23 +327,72 @@ class _EditorScreenState extends State<EditorScreen>
     );
   }
 
-  Widget _stepBtn(IconData icon, VoidCallback onTap) {
-    Timer? holdTimer;
-    return GestureDetector(
-      onTap: onTap,
-      // ضغط مطوّل = تحريك مستمر (خطوة المللي ثانية تصبح عملية)
-      onLongPressStart: (_) {
-        holdTimer = Timer.periodic(
-            const Duration(milliseconds: 30), (_) => onTap());
-      },
-      onLongPressEnd: (_) => holdTimer?.cancel(),
-      onLongPressCancel: () => holdTimer?.cancel(),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Icon(icon, size: 20, color: Mushaf.foreground),
+  /// يحوّل نصًّا مثل "2:05.1" أو "125.1" إلى ثوانٍ. يرجع null إن كان غير صالح.
+  double? _parseTime(String input) {
+    final txt = input.trim();
+    if (txt.isEmpty) return null;
+    final parts = txt.split(':');
+    try {
+      if (parts.length == 2) {
+        return int.parse(parts[0]) * 60 + double.parse(parts[1]);
+      } else if (parts.length == 1) {
+        return double.parse(parts[0]);
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// نافذة إدخال الوقت يدويًا بالكيبورد (دقائق:ثواني.أعشار).
+  Future<void> _editTime(
+      String title, double current, double lo, double hi,
+      void Function(double) onSet) async {
+    final ctrl = TextEditingController(text: _fmtP(current));
+    final result = await showDialog<double>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Mushaf.card,
+        title: Text(title,
+            style: const TextStyle(
+                fontWeight: FontWeight.w800, color: Mushaf.foreground)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: ctrl,
+              autofocus: true,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(hintText: '0:00.0'),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 8),
+            Text('الصيغة: دقائق:ثواني.أعشار (مثل 2:05.1)',
+                style: const TextStyle(
+                    fontSize: 12, color: Mushaf.mutedForeground)),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(t('logout') == 'خروج' ? 'إلغاء' : 'Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final v = _parseTime(ctrl.text);
+              Navigator.pop(ctx, v);
+            },
+            child: Text(t('resetConfirm')),
+          ),
+        ],
       ),
     );
+    if (result != null) {
+      onSet(result.clamp(lo, hi).toDouble());
+    }
   }
+
+  Widget _stepBtn(IconData icon, VoidCallback onTap) =>
+      _HoldButton(icon: icon, onStep: onTap);
 
   Widget _segmentCard(int i) {
     final start = _edges[i], end = _edges[i + 1];
@@ -468,13 +531,84 @@ class _EditorScreenState extends State<EditorScreen>
           // ── صفّان محدّدان بالاسم: البداية / النهاية (يشيلان الغموض) ──
           Row(
             children: [
-              _adjust(t('startLabel'), _fmtP(start),
-                  () => _nudge(i, true, -0.001), () => _nudge(i, true, 0.001)),
-              _adjust(t('endLabel'), _fmtP(end),
-                  () => _nudge(i, false, -0.001), () => _nudge(i, false, 0.001)),
+              _adjust(
+                t('startLabel'),
+                _fmtP(start),
+                () => _nudge(i, true, -0.1),
+                () => _nudge(i, true, 0.1),
+                () => _editTime(
+                  t('startLabel'),
+                  start,
+                  i == 0 ? 0.0 : _edges[i - 1] + _minGap,
+                  _edges[i + 1] - _minGap,
+                  (v) => setState(() => _edges[i] = v),
+                ),
+              ),
+              _adjust(
+                t('endLabel'),
+                _fmtP(end),
+                () => _nudge(i, false, -0.1),
+                () => _nudge(i, false, 0.1),
+                () => _editTime(
+                  t('endLabel'),
+                  end,
+                  _edges[i] + _minGap,
+                  i == _n - 1 ? widget.duration : _edges[i + 2] - _minGap,
+                  (v) => setState(() => _edges[i + 1] = v),
+                ),
+              ),
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+
+/// زر ضغط-مطوّل موثوق: يبدأ تكرارًا متسارعًا عند الضغط المطوّل ويوقفه بأمان
+/// عند الرفع/الإلغاء/التخلص — يحل مشكلة "الاستمرار في التحرك بعد رفع الإصبع".
+class _HoldButton extends StatefulWidget {
+  final IconData icon;
+  final VoidCallback onStep;
+  const _HoldButton({required this.icon, required this.onStep});
+
+  @override
+  State<_HoldButton> createState() => _HoldButtonState();
+}
+
+class _HoldButtonState extends State<_HoldButton> {
+  Timer? _timer;
+
+  void _startHold() {
+    _stopHold();
+    widget.onStep(); // خطوة فورية عند بدء الضغط
+    _timer = Timer.periodic(
+        const Duration(milliseconds: 120), (_) => widget.onStep());
+  }
+
+  void _stopHold() {
+    _timer?.cancel();
+    _timer = null;
+  }
+
+  @override
+  void dispose() {
+    _stopHold(); // ضمان الإلغاء دائمًا (يمنع الاستمرار/التعليق)
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: widget.onStep,
+      onLongPressStart: (_) => _startHold(),
+      onLongPressEnd: (_) => _stopHold(),
+      onLongPressCancel: _stopHold,
+      onTapCancel: _stopHold,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Icon(widget.icon, size: 20, color: Mushaf.foreground),
       ),
     );
   }
